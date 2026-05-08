@@ -1,7 +1,6 @@
 package com.mediqueue.appointment.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.mediqueue.appointment.domain.Appointment;
 import com.mediqueue.appointment.domain.AppointmentAudit;
 import com.mediqueue.appointment.domain.AppointmentHold;
@@ -9,9 +8,11 @@ import com.mediqueue.appointment.domain.OutboxEvent;
 import com.mediqueue.appointment.domain.enums.AppointmentStatus;
 import com.mediqueue.appointment.domain.enums.HoldStatus;
 import com.mediqueue.appointment.domain.enums.OutboxPublicationStatus;
+import com.mediqueue.appointment.events.published.AppointmentExpiredEvent;
 import com.mediqueue.appointment.repository.AppointmentAuditRepository;
 import com.mediqueue.appointment.repository.AppointmentHoldRepository;
 import com.mediqueue.appointment.repository.AppointmentRepository;
+import com.mediqueue.appointment.repository.IdempotencyKeyRepository;
 import com.mediqueue.appointment.repository.OutboxEventRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -20,7 +21,9 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
+import java.util.UUID;
 
 /**
  * Scheduled job that detects expired appointment holds and transitions
@@ -40,6 +43,7 @@ public class HoldExpirationScheduler {
     private final AppointmentRepository appointmentRepository;
     private final AppointmentAuditRepository auditRepository;
     private final OutboxEventRepository outboxEventRepository;
+    private final IdempotencyKeyRepository idempotencyKeyRepository;
     private final ObjectMapper objectMapper;
     private final TransactionTemplate transactionTemplate;
 
@@ -47,12 +51,14 @@ public class HoldExpirationScheduler {
                                    AppointmentRepository appointmentRepository,
                                    AppointmentAuditRepository auditRepository,
                                    OutboxEventRepository outboxEventRepository,
+                                   IdempotencyKeyRepository idempotencyKeyRepository,
                                    ObjectMapper objectMapper,
                                    TransactionTemplate transactionTemplate) {
         this.holdRepository = holdRepository;
         this.appointmentRepository = appointmentRepository;
         this.auditRepository = auditRepository;
         this.outboxEventRepository = outboxEventRepository;
+        this.idempotencyKeyRepository = idempotencyKeyRepository;
         this.objectMapper = objectMapper;
         this.transactionTemplate = transactionTemplate;
     }
@@ -99,18 +105,57 @@ public class HoldExpirationScheduler {
         event.setAggregateType("appointments-exchange");
         event.setAggregateId(appointment.getAppointmentId());
         event.setEventType("appointment.expired");
-        event.setPayload(buildPayload(appointment));
         event.setPublicationStatus(OutboxPublicationStatus.PENDING);
+
+        try {
+            AppointmentExpiredEvent expiredEvent = new AppointmentExpiredEvent(
+                    UUID.randomUUID().toString(),
+                    "APPOINTMENT_EXPIRED",
+                    Instant.now().toString(),
+                    new AppointmentExpiredEvent.AppointmentExpiredPayload(
+                            appointment.getAppointmentId(),
+                            appointment.getPatientId(),
+                            appointment.getDentistId(),
+                            appointment.getAppointmentDate(),
+                            appointment.getStartTime()
+                    )
+            );
+            String payload = objectMapper.writeValueAsString(expiredEvent);
+            event.setPayload(payload);
+        } catch (Exception ex) {
+            throw new RuntimeException("Failed to serialize appointment.expired event", ex);
+        }
+
         outboxEventRepository.save(event);
     }
 
-    private String buildPayload(Appointment appointment) {
-        ObjectNode node = objectMapper.createObjectNode();
-        node.put("appointmentId", appointment.getAppointmentId().toString());
-        node.put("patientId", appointment.getPatientId().toString());
-        node.put("dentistId", appointment.getDentistId().toString());
-        node.put("appointmentDate", appointment.getAppointmentDate().toString());
-        node.put("startTime", appointment.getStartTime().toString());
-        return node.toString();
+    /**
+     * Cleans up expired idempotency keys from the database.
+     *
+     * <p>Runs on a fixed delay configured via
+     * {@code mediqueue.idempotency.cleanup-interval-seconds} (default: 3600 seconds).</p>
+     */
+    @Scheduled(fixedDelayString = "${mediqueue.idempotency.cleanup-interval-seconds:3600}000")
+    public void cleanExpiredIdempotencyKeys() {
+        int deleted = idempotencyKeyRepository.deleteExpiredKeys(Instant.now());
+        if (deleted > 0) {
+            log.info("Idempotency keys expiradas eliminadas: {}", deleted);
+        }
+    }
+
+    /**
+     * Deletes published outbox events older than 7 days.
+     *
+     * <p>Runs on a fixed delay configured via
+     * {@code mediqueue.outbox.cleanup-interval-seconds} (default: 86400 seconds).</p>
+     */
+    @Scheduled(fixedDelayString = "${mediqueue.outbox.cleanup-interval-seconds:86400}000")
+    public void cleanPublishedOutboxEvents() {
+        Instant sevenDaysAgo = Instant.now().minus(7, ChronoUnit.DAYS);
+        int deleted = outboxEventRepository.deletePublishedBefore(
+                OutboxPublicationStatus.PUBLISHED, sevenDaysAgo);
+        if (deleted > 0) {
+            log.info("Outbox events publicados eliminados: {}", deleted);
+        }
     }
 }

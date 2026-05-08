@@ -5,10 +5,13 @@ import com.mediqueue.appointment.domain.enums.OutboxPublicationStatus;
 import com.mediqueue.appointment.repository.OutboxEventRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.amqp.core.Message;
+import org.springframework.amqp.core.MessageBuilder;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.List;
 
@@ -48,7 +51,11 @@ public class OutboxPublisher {
 
         for (OutboxEvent event : pending) {
             try {
-                rabbitTemplate.convertAndSend(event.getAggregateType(), event.getEventType(), event.getPayload());
+                Message message = MessageBuilder
+                        .withBody(event.getPayload().getBytes(StandardCharsets.UTF_8))
+                        .setContentType("application/json")
+                        .build();
+                rabbitTemplate.send(event.getAggregateType(), event.getEventType(), message);
 
                 event.setPublicationStatus(OutboxPublicationStatus.PUBLISHED);
                 event.setPublishedAt(Instant.now());
@@ -60,6 +67,37 @@ public class OutboxPublisher {
                 outboxEventRepository.save(event);
 
                 log.error("outbox_publish_failed eventId={} type={}", event.getEventId(), event.getEventType(), ex);
+            }
+        }
+    }
+
+    /**
+     * Retries outbox events that previously failed to publish.
+     *
+     * <p>Runs on a fixed delay configured via
+     * {@code mediqueue.outbox.retry-interval-seconds} (default: 30 seconds).</p>
+     */
+    @Scheduled(fixedDelayString = "${mediqueue.outbox.retry-interval-seconds:30}000")
+    public void retryFailedEvents() {
+        List<OutboxEvent> failedEvents = outboxEventRepository
+                .findTop10ByPublicationStatusOrderByCreatedAtAsc(OutboxPublicationStatus.FAILED);
+
+        for (OutboxEvent event : failedEvents) {
+            try {
+                Message message = MessageBuilder
+                        .withBody(event.getPayload().getBytes(StandardCharsets.UTF_8))
+                        .setContentType("application/json")
+                        .build();
+                rabbitTemplate.send(event.getAggregateType(), event.getEventType(), message);
+
+                event.setPublicationStatus(OutboxPublicationStatus.PUBLISHED);
+                event.setPublishedAt(Instant.now());
+                outboxEventRepository.save(event);
+
+                log.info("Outbox event reintentado exitosamente: {}", event.getEventId());
+            } catch (Exception e) {
+                log.error("Reintento fallido para outbox event {}: {}",
+                        event.getEventId(), e.getMessage());
             }
         }
     }

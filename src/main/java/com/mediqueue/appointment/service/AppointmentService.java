@@ -29,6 +29,9 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
@@ -88,6 +91,7 @@ public class AppointmentService {
      * @throws BusinessException if the request is already processing or the slot is taken
      */
     @Transactional
+    @SuppressWarnings("null")
     public AppointmentResponse createAppointment(AppointmentRequest request, String idempotencyKey) {
         // (a) Idempotency check
         var existing = idempotencyKeyRepository
@@ -110,7 +114,7 @@ public class AppointmentService {
         IdempotencyKey idemKey = new IdempotencyKey();
         idemKey.setOperationType(CREATE_OPERATION);
         idemKey.setIdempotencyKey(idempotencyKey);
-        idemKey.setRequestHash(idempotencyKey);
+        idemKey.setRequestHash(computeHash(idempotencyKey));
         idemKey.setStatus(IdempotencyStatus.PROCESSING);
         idemKey.setExpiresAt(Instant.now().plus(24, ChronoUnit.HOURS));
         idempotencyKeyRepository.save(idemKey);
@@ -311,6 +315,7 @@ public class AppointmentService {
     // Private helpers
     // =========================================================================
 
+    @SuppressWarnings("null")
     private Appointment findOrFail(UUID appointmentId) {
         return appointmentRepository.findById(appointmentId)
                 .orElseThrow(() -> new EntityNotFoundException("Appointment not found: " + appointmentId));
@@ -356,5 +361,27 @@ public class AppointmentService {
         }
 
         outboxEventRepository.save(outbox);
+    }
+
+    /**
+     * Computes a SHA-256 hex digest of the given input string.
+     * Falls back to returning the raw input if SHA-256 is unavailable.
+     *
+     * @param input the string to hash
+     * @return hex-encoded SHA-256 digest, or {@code input} on failure
+     */
+    private String computeHash(String input) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] hash = digest.digest(input.getBytes(StandardCharsets.UTF_8));
+            StringBuilder hexString = new StringBuilder();
+            for (byte b : hash) {
+                hexString.append(String.format("%02x", b));
+            }
+            return hexString.toString();
+        } catch (NoSuchAlgorithmException e) {
+            log.warn("SHA-256 no disponible, usando fallback");
+            return input;
+        }
     }
 }

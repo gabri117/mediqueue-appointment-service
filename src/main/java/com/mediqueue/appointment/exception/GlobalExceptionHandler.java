@@ -7,6 +7,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingRequestHeaderException;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
@@ -54,6 +55,14 @@ public class GlobalExceptionHandler {
                 "Header requerido ausente: " + ex.getHeaderName());
     }
 
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<ErrorResponse> handleDataIntegrityViolation(
+            DataIntegrityViolationException ex) {
+        log.warn("Violación de integridad de datos: {}", ex.getMostSpecificCause().getMessage());
+        return buildResponse(HttpStatus.CONFLICT, "DATA_INTEGRITY_VIOLATION",
+                "Operación rechazada: recurso duplicado o restricción violada");
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleGeneric(Exception ex) {
         log.error("unhandled_exception", ex);
@@ -62,6 +71,6 @@ public class GlobalExceptionHandler {
     }
 
     private ResponseEntity<ErrorResponse> buildResponse(HttpStatus status, String code, String message) {
-        return ResponseEntity.status(status).body(new ErrorResponse(code, message, Instant.now()));
+        return ResponseEntity.status(status.value()).body(new ErrorResponse(code, message, Instant.now()));
     }
 }
