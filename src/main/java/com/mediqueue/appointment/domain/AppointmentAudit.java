@@ -2,9 +2,9 @@ package com.mediqueue.appointment.domain;
 
 import com.mediqueue.appointment.domain.enums.AppointmentStatus;
 import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
+import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
@@ -44,7 +44,7 @@ public class AppointmentAudit {
     @Enumerated(EnumType.STRING)
     @Column(name = "previous_status")
     private AppointmentStatus previousStatus;
-
+ 
     @Enumerated(EnumType.STRING)
     @Column(name = "new_status", nullable = false)
     private AppointmentStatus newStatus;

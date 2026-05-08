@@ -13,15 +13,7 @@
 
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
--- =============================================================================
--- ENUMS
--- =============================================================================
-CREATE TYPE appointment_status        AS ENUM (
-    'PENDING_PAYMENT', 'CONFIRMED', 'CANCELLED', 'EXPIRED'
-);
-CREATE TYPE hold_status               AS ENUM ('ACTIVE', 'RELEASED', 'EXPIRED', 'CONSUMED');
-CREATE TYPE idempotency_status        AS ENUM ('PROCESSING', 'SUCCEEDED', 'FAILED');
-CREATE TYPE outbox_publication_status AS ENUM ('PENDING', 'PUBLISHED', 'FAILED');
+
 
 -- =============================================================================
 -- TABLA: appointments
@@ -35,7 +27,7 @@ CREATE TABLE appointments (
     appointment_date    DATE NOT NULL,
     start_time          TIME NOT NULL,
     end_time            TIME NOT NULL,
-    appointment_status  appointment_status NOT NULL DEFAULT 'PENDING_PAYMENT',
+    appointment_status  VARCHAR(30) NOT NULL DEFAULT 'PENDING_PAYMENT',
     notes               TEXT,
     created_at          TIMESTAMP NOT NULL DEFAULT NOW(),
     updated_at          TIMESTAMP NOT NULL DEFAULT NOW()
@@ -60,7 +52,7 @@ CREATE TABLE appointment_holds (
     hold_id         UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     appointment_id  UUID NOT NULL,
     slot_id         UUID NOT NULL,
-    hold_status     hold_status NOT NULL DEFAULT 'ACTIVE',
+    hold_status     VARCHAR(30) NOT NULL DEFAULT 'ACTIVE',
     expires_at      TIMESTAMP NOT NULL,
     created_at      TIMESTAMP NOT NULL DEFAULT NOW(),
     released_at     TIMESTAMP,
@@ -83,8 +75,8 @@ CREATE INDEX idx_holds_expiration
 CREATE TABLE appointment_audit (
     audit_id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     appointment_id    UUID NOT NULL,
-    previous_status   appointment_status,
-    new_status        appointment_status NOT NULL,
+    previous_status   VARCHAR(30),
+    new_status        VARCHAR(30) NOT NULL,
     change_reason     VARCHAR(200),
     changed_at        TIMESTAMP NOT NULL DEFAULT NOW(),
     CONSTRAINT fk_audit_appointment
@@ -116,7 +108,7 @@ CREATE TABLE idempotency_keys (
     idempotency_key     VARCHAR(120) NOT NULL,
     request_hash        VARCHAR(128) NOT NULL,
     response_reference  VARCHAR(120),
-    status              idempotency_status NOT NULL DEFAULT 'PROCESSING',
+    status              VARCHAR(30) NOT NULL DEFAULT 'PROCESSING',
     created_at          TIMESTAMP NOT NULL DEFAULT NOW(),
     expires_at          TIMESTAMP NOT NULL,
     CONSTRAINT uq_idempotency_op_key UNIQUE (operation_type, idempotency_key)
@@ -135,7 +127,7 @@ CREATE TABLE outbox_events (
     aggregate_id        UUID         NOT NULL,
     event_type          VARCHAR(80)  NOT NULL,
     payload             TEXT         NOT NULL,
-    publication_status  outbox_publication_status NOT NULL DEFAULT 'PENDING',
+    publication_status  VARCHAR(30) NOT NULL DEFAULT 'PENDING',
     created_at          TIMESTAMP    NOT NULL DEFAULT NOW(),
     published_at        TIMESTAMP
 );
