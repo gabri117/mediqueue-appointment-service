@@ -1,7 +1,6 @@
 package com.mediqueue.appointment.messaging;
 
 import com.mediqueue.appointment.events.consumed.PaymentFailedEvent;
-import com.mediqueue.appointment.exception.IllegalStateTransitionException;
 import com.mediqueue.appointment.service.AppointmentService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -36,8 +35,6 @@ public class PaymentFailedConsumer {
 
         try {
             appointmentService.compensateAppointment(event.payload().appointmentId());
-        } catch (IllegalStateTransitionException ex) {
-            log.warn("compensate_skipped appointmentId={} reason={}", event.payload().appointmentId(), ex.getMessage());
         } catch (Exception ex) {
             log.error("compensate_failed appointmentId={}", event.payload().appointmentId(), ex);
             throw ex;

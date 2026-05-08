@@ -76,6 +76,9 @@ Header requerido: `X-Idempotency-Key: uuid-del-cliente`
 | `APPOINTMENT_HOLD_TTL_MINUTES` | Minutos de validez del hold | `5` | ❌ No (default) |
 | `HOLD_EXPIRATION_SCAN_SECONDS` | Intervalo de escaneo de expiración | `30` | ❌ No (default) |
 | `OUTBOX_PUBLISH_INTERVAL_SECONDS` | Intervalo de publicación de outbox | `1` | ❌ No (default) |
+| `OUTBOX_RETRY_INTERVAL_SECONDS` | Intervalo de reintento de eventos FAILED | `30` | ❌ No (default) |
+| `IDEMPOTENCY_CLEANUP_INTERVAL_SECONDS` | Intervalo de limpieza de keys expiradas | `3600` | ❌ No (default) |
+| `OUTBOX_CLEANUP_INTERVAL_SECONDS` | Intervalo de limpieza de outbox publicados | `86400` | ❌ No (default) |
 
 ---
 

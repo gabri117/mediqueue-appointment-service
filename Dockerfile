@@ -20,4 +20,5 @@ COPY --from=build /app/target/*.jar app.jar
 HEALTHCHECK --interval=10s --timeout=5s --start-period=30s --retries=3 \
   CMD wget -qO- http://localhost:8083/actuator/health || exit 1
 
+EXPOSE 8083
 ENTRYPOINT ["java", "-jar", "app.jar"]
