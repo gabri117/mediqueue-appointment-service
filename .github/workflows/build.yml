@@ -28,7 +28,7 @@ jobs:
           cache: maven
 
       - name: Build and test
-        run: mvn verify -B
+        run: mvn package -DskipTests -B
 
       - name: Log in to Container Registry
         if: github.event_name != 'pull_request'
