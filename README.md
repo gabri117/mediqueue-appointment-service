@@ -4,6 +4,24 @@ Microservicio crítico para la gestión de citas médicas en la plataforma **Med
 
 ---
 
+## ⚡ Quick Reference (Para Integración)
+
+**Puerto**: `8083`
+
+**Endpoints disponibles**:
+- `POST /appointments` — Crea una cita. **Requiere header `X-Idempotency-Key`**
+- `GET /appointments/{id}` — Obtiene una cita por UUID
+- `GET /appointments?patientId={id}` — Lista citas de un paciente
+
+**Setup inicial**:
+```bash
+cp .env.example .env   # Copiar configuración
+# → Editar .env con tus credenciales
+mvn spring-boot:run    # Iniciar
+```
+
+---
+
 ## Stack Tecnológico
 
 | Componente | Tecnología | Versión |
@@ -82,17 +100,36 @@ Header requerido: `X-Idempotency-Key: uuid-del-cliente`
 
 ---
 
-## Cómo Levantar el Servicio Localmente
+## Guía Rápida para Integración
 
-### Prerrequisitos
-
-- Java 21+ (Temurin recomendado)
+### Requisitos Previos
+- Java 21+
 - Maven 3.9+
-- PostgreSQL 14+ corriendo en `localhost:5432`
-- RabbitMQ 3.x corriendo en `localhost:5672`
-- *(Opcional)* Redis 6.x+ corriendo en `localhost:6379`
+- PostgreSQL 14+ corriendo
+- RabbitMQ 3.x corriendo
 
-### Pasos
+### Configuración Rápida
+
+```bash
+# 1. Clonar el repositorio
+git clone <repo-url>
+cd mediqueue-appointment-service
+
+# 2. Configurar variables de entorno
+cp .env.example .env
+# → Editar .env con tus credenciales
+
+# 3. Iniciar la aplicación
+mvn spring-boot:run
+```
+
+**El servicio corre en el puerto `8083`**
+
+---
+
+## Cómo Levantar el Servicio Localmente (Detallado)
+
+### Pasos Completos
 
 ```bash
 # 1. Clonar el repositorio
@@ -117,7 +154,7 @@ mvn test
 mvn spring-boot:run
 ```
 
-La aplicación arrancará en `http://localhost:8080` (por defecto).
+La aplicación arrancará en `http://localhost:8083`.
 
 ### Con Docker
 
